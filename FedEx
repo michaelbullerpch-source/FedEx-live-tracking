@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>FedEx - Live Tracking</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #eef0f3; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .container { max-width: 780px; width: 100%; background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); overflow: hidden; }
+
+        .header { background: #4d148c; padding: 18px 28px; display: flex; align-items: center; gap: 10px; }
+        .header h1 { color: white; font-size: 22px; font-weight: 600; }
+        .header .fedex-icon { color: #ffcc00; font-size: 26px; font-weight: 800; }
+
+        .search-section { background: #f8f9fc; padding: 24px 28px; border-bottom: 1px solid #e4e7ec; }
+        .search-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .search-row input { flex: 1; padding: 12px 16px; border: 2px solid #d0d5dd; border-radius: 8px; font-size: 16px; outline: none; transition: 0.2s; min-width: 180px; }
+        .search-row input:focus { border-color: #4d148c; }
+        .search-row button { background: #4d148c; color: white; border: none; padding: 12px 28px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .search-row button:hover { background: #3b0f6e; }
+        .search-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .loading { display: none; align-items: center; gap: 14px; padding: 14px 0 6px 0; }
+        .spinner { width: 22px; height: 22px; border: 3px solid #e0e0e0; border-top: 3px solid #4d148c; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { color: #4d148c; font-weight: 500; font-size: 15px; }
+
+        .results { display: none; padding: 24px 28px; }
+        .tracking-display { background: #f3f4f8; padding: 14px 18px; border-radius: 10px; margin-bottom: 22px; }
+        .tracking-display .label { font-size: 12px; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
+        .tracking-display .number { font-size: 26px; font-weight: 700; color: #1a1a1a; letter-spacing: 0.5px; }
+
+        .status-badge { display: inline-block; padding: 6px 16px; border-radius: 30px; font-weight: 600; font-size: 14px; margin-bottom: 16px; }
+        .status-badge.in-transit { background: #fff3cd; color: #856404; }
+        .status-badge.delivered { background: #d4edda; color: #155724; }
+        .status-badge.pending { background: #f8d7da; color: #721c24; }
+        .status-badge.delivering { background: #cce5ff; color: #004085; }
+
+        /* Progress Bar */
+        .progress-section { margin: 12px 0 18px 0; }
+        .progress-label { display: flex; justify-content: space-between; font-size: 14px; color: #555; margin-bottom: 6px; }
+        .progress-bar { width: 100%; height: 10px; background: #e8ecf3; border-radius: 30px; overflow: hidden; position: relative; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #4d148c, #7b2fbe); border-radius: 30px; transition: width 0.5s ease; width: 0%; }
+        .progress-fill.delivered { background: linear-gradient(90deg, #2e7d32, #66bb6a); }
+        .progress-fill.pending { background: linear-gradient(90deg, #c62828, #ef5350); }
+        .progress-fill.delivering { background: linear-gradient(90deg, #004085, #42a5f5); }
+        .progress-percent { font-weight: 700; color: #4d148c; }
+
+        .route { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fafbff; padding: 18px 20px; border-radius: 12px; border: 1px solid #e8ecf3; margin: 16px 0 22px 0; flex-wrap: wrap; }
+        .route .location { display: flex; flex-direction: column; align-items: center; flex: 1; }
+        .route .location .city { font-weight: 700; font-size: 16px; color: #1a1a1a; }
+        .route .location .detail { font-size: 13px; color: #777; }
+        .route .arrow { font-size: 28px; color: #4d148c; font-weight: 300; }
+        .route .live-dot { width: 10px; height: 10px; background: #2e7d32; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite; margin-right: 6px; }
+        @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+
+        .timeline h3 { font-size: 16px; color: #333; margin-bottom: 14px; font-weight: 600; }
+        .event { display: flex; gap: 16px; padding: 12px 0; border-bottom: 1px solid #f0f2f6; }
+        .event:last-child { border-bottom: none; }
+        .event .dot { width: 12px; height: 12px; border-radius: 50%; background: #4d148c; flex-shrink: 0; margin-top: 4px; }
+        .event .dot.gray { background: #bbb; }
+        .event .dot.green { background: #2e7d32; }
+        .event .dot.blue { background: #004085; }
+        .event .details .title { font-weight: 600; color: #1a1a1a; }
+        .event .details .sub { font-size: 14px; color: #666; margin-top: 2px; }
+        .event .details .time { font-size: 13px; color: #999; margin-top: 4px; }
+
+        .footer { background: #f8f9fc; padding: 14px 28px; font-size: 13px; color: #999; border-top: 1px solid #e8ecf3; text-align: center; }
+        .live-tag { font-size: 13px; color: #2e7d32; font-weight: 500; margin-left: 10px; }
+        .day-counter { font-size: 14px; color: #555; margin-top: 6px; font-weight: 500; }
+        .countdown-timer { font-size: 15px; color: #4d148c; margin-top: 4px; font-weight: 600; }
+        .ship-date-display { font-size: 13px; color: #888; margin-top: 2px; }
+        .auto-update-badge { background: #e8f5e9; color: #2e7d32; font-size: 11px; padding: 2px 10px; border-radius: 12px; margin-left: 8px; display: inline-block; }
+        .saved-badge { background: #e3f2fd; color: #0d47a1; font-size: 11px; padding: 2px 10px; border-radius: 12px; margin-left: 8px; display: inline-block; }
+        .no-city { color: #999; font-weight: 400; font-size: 14px; }
+        .memory-notice { font-size: 12px; color: #888; margin-top: 8px; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <span class="fedex-icon">FedEx</span>
+        <h1>Live Tracking</h1>
+    </div>
+
+    <div class="search-section">
+        <div class="search-row">
+            <input type="text" id="trackingInput" placeholder="Enter any tracking number" value="FX-4829-0716-4921" />
+            <button id="trackBtn">Track</button>
+        </div>
+        <div class="loading" id="loadingIndicator">
+            <div class="spinner"></div>
+            <span class="loading-text">Fetching live package data...</span>
+        </div>
+    </div>
+
+    <div class="results" id="resultsPanel">
+        <div class="tracking-display">
+            <div class="label">Tracking Number</div>
+            <div class="number" id="displayTrackingNum">FX-4829-0716-4921</div>
+            <div style="margin-top: 6px;">
+                <span class="saved-badge" id="savedBadge" style="display:none;">💾 Saved in memory</span>
+            </div>
+        </div>
+
+        <div>
+            <span class="status-badge in-transit" id="statusBadge">● In Transit</span>
+            <span class="live-tag" id="liveTag">🔴 LIVE</span>
+            <span class="auto-update-badge">⏱ Auto-updates</span>
+        </div>
+        <div class="day-counter" id="dayCounter">Day 1 of shipment</div>
+        <div class="countdown-timer" id="countdownTimer">⏳ 0d 0h 0m 0s in transit</div>
+        <div class="ship-date-display" id="shipDateDisplay">📦 Shipped: Just now</div>
+
+        <!-- Progress Bar -->
+        <div class="progress-section">
+            <div class="progress-label">
+                <span>Delivery Progress</span>
+                <span class="progress-percent" id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+            </div>
+        </div>
+
+        <div class="route" id="routeDisplay">
+            <div class="location">
+                <span class="city no-city">📍 Origin</span>
+                <span class="detail">Package picked up</span>
+            </div>
+            <div class="arrow">➜</div>
+            <div class="location">
+                <span class="city no-city">📍 Destination</span>
+                <span class="detail">Awaiting delivery</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; font-size:14px; color:#555;">
+                <span class="live-dot"></span> <span id="lastUpdate">Updated just now</span>
+            </div>
+        </div>
+
+        <div class="timeline">
+            <h3>Tracking History</h3>
+            <div id="timelineContainer"></div>
+        </div>
+        
+        <div class="memory-notice" id="memoryNotice">💡 Tracking data is saved in your browser. Close and reopen to continue tracking!</div>
+    </div>
+
+    <div class="footer">🔐 Fake tracking page for educational purposes. Not affiliated with FedEx.</div>
+</div>
+
+<script>
+    // ---------- LocalStorage keys ----------
+    const STORAGE_PREFIX = 'fedex_tracking_';
+
+    // ---------- Global state ----------
+    let currentTrackingNumber = null;
+    let currentShipDate = null;
+    let updateInterval = null;
+
+    // ---------- Save to localStorage ----------
+    function saveTrackingData(trackingNumber, shipDate) {
+        if (!trackingNumber) return;
+        const key = STORAGE_PREFIX + trackingNumber;
+        const data = {
+            trackingNumber: trackingNumber,
+            shipDate: shipDate.toISOString(),
+            savedAt: new Date().toISOString()
+        };
+        localStorage.setItem(key, JSON.stringify(data));
+        
+        // Show saved badge
+        document.getElementById('savedBadge').style.display = 'inline-block';
+    }
+
+    // ---------- Load from localStorage ----------
+    function loadTrackingData(trackingNumber) {
+        if (!trackingNumber) return null;
+        const key = STORAGE_PREFIX + trackingNumber;
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        
+        try {
+            const data = JSON.parse(raw);
+            return {
+                trackingNumber: data.trackingNumber,
+                shipDate: new Date(data.shipDate)
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // ---------- Get all saved tracking numbers ----------
+    function getAllSavedTrackingNumbers() {
+        const keys = Object.keys(localStorage);
+        const numbers = [];
+        keys.forEach(key => {
+            if (key.startsWith(STORAGE_PREFIX)) {
+                const raw = localStorage.getItem(key);
+                try {
+                    const data = JSON.parse(raw);
+                    numbers.push(data.trackingNumber);
+                } catch (e) {}
+            }
+        });
+        return numbers;
+    }
+
+    // ---------- Date-based status logic ----------
+    function getShipmentStatus(shipDate) {
+        const now = new Date();
+        const diffTime = now - shipDate;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+        const diffMinutes = Math.floor((diffTime % (1000 * 60 * 60)) / (1000 * 60));
+        const diffSeconds = Math.floor((diffTime % (1000 * 60)) / 1000);
+
+        let status, statusClass, events;
+        let progress = 0;
+
+        if (diffDays === 1) {
+            status = "Pending";
+            statusClass = "pending";
+            progress = 5;
+            events = [
+                { title: "Label Created", sub: "Shipment info received", time: formatDate(shipDate, 0, "9:00 AM") },
+                { title: "Pending Pickup", sub: "Awaiting carrier pickup", time: formatDate(shipDate, 0, "11:30 AM") }
+            ];
+        } else if (diffDays >= 2 && diffDays <= 4) {
+            status = "In Transit";
+            statusClass = "in-transit";
+            // Progress: 20% on day 2, 50% on day 3, 75% on day 4
+            const dayProgress = { 2: 20, 3: 50, 4: 75 };
+            progress = dayProgress[diffDays] || 30;
+            events = [
+                { title: "Departed Origin", sub: "Package left facility", time: formatDate(shipDate, 1, "10:15 AM") },
+                { title: "In Transit", sub: "Arrived at Memphis hub", time: formatDate(shipDate, 2, "11:42 PM") },
+                { title: "In Transit", sub: "Departed Memphis hub", time: formatDate(shipDate, 3, "3:20 AM") },
+                { title: "In Transit", sub: "Approaching destination", time: formatDate(shipDate, 4, "8:45 AM") }
+            ];
+        } else if (diffDays === 5) {
+            status = "Delivering";
+            statusClass = "delivering";
+            progress = 90;
+            events = [
+                { title: "Out for Delivery", sub: "On FedEx vehicle", time: formatDate(shipDate, 5, "8:15 AM") },
+                { title: "Delivering", sub: "Driver is en route to destination", time: formatDate(shipDate, 5, "1:20 PM") },
+                { title: "Estimated Arrival", sub: "Expected by end of day", time: formatDate(shipDate, 5, "3:00 PM") }
+            ];
+        } else {
+            status = "Delivered";
+            statusClass = "delivered";
+            progress = 100;
+            events = [
+                { title: "Delivered", sub: "Left at front porch", time: formatDate(shipDate, 6, "2:37 PM") },
+                { title: "Out for Delivery", sub: "On FedEx vehicle", time: formatDate(shipDate, 5, "8:15 AM") },
+                { title: "In Transit", sub: "Departed Memphis hub", time: formatDate(shipDate, 3, "3:20 AM") },
+                { title: "Departed Origin", sub: "Left facility", time: formatDate(shipDate, 1, "10:15 AM") }
+            ];
+        }
+
+        return { status, statusClass, events, diffDays, diffHours, diffMinutes, diffSeconds, progress };
+    }
+
+    // Helper: format date with offset days
+    function formatDate(baseDate, daysOffset, timeStr) {
+        const d = new Date(baseDate);
+        d.setDate(d.getDate() + daysOffset);
+        const month = d.toLocaleString('en-US', { month: 'short' });
+        const day = d.getDate();
+        const year = d.getFullYear();
+        return `${month} ${day}, ${year} - ${timeStr}`;
+    }
+
+    // ---------- DOM refs ----------
+    const input = document.getElementById('trackingInput');
+    const trackBtn = document.getElementById('trackBtn');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const resultsPanel = document.getElementById('resultsPanel');
+    const displayNum = document.getElementById('displayTrackingNum');
+    const statusBadge = document.getElementById('statusBadge');
+    const liveTag = document.getElementById('liveTag');
+    const lastUpdate = document.getElementById('lastUpdate');
+    const timelineContainer = document.getElementById('timelineContainer');
+    const dayCounter = document.getElementById('dayCounter');
+    const countdownTimer = document.getElementById('countdownTimer');
+    const shipDateDisplay = document.getElementById('shipDateDisplay');
+    const progressFill = document.getElementById('progressFill');
+    const progressPercent = document.getElementById('progressPercent');
+    const savedBadge = document.getElementById('savedBadge');
+    const memoryNotice = document.getElementById('memoryNotice');
+
+    // ---------- Render timeline ----------
+    function renderTimeline(events) {
+        timelineContainer.innerHTML = '';
+        events.forEach((ev, index) => {
+            const div = document.createElement('div');
+            div.className = 'event';
+            let dotClass = 'dot';
+            if (ev.title.toLowerCase().includes('delivered')) dotClass += ' green';
+            else if (ev.title.toLowerCase().includes('pending')) dotClass += ' gray';
+            else if (ev.title.toLowerCase().includes('delivering')) dotClass += ' blue';
+            else if (index === events.length - 1 && !ev.title.toLowerCase().includes('delivered')) dotClass += ' gray';
+            div.innerHTML = `
+                <div class="${dotClass}"></div>
+                <div class="details">
+                    <div class="title">${ev.title}</div>
+                    <div class="sub">${ev.sub}</div>
+                    <div class="time">${ev.time}</div>
+                </div>
+            `;
+            timelineContainer.appendChild(div);
+        });
+    }
+
+    // ---------- Update UI (called every second) ----------
+    function updateUI() {
+        if (!currentShipDate || !currentTrackingNumber) return;
+
+        const { status, statusClass, events, diffDays, diffHours, diffMinutes, diffSeconds, progress } = getShipmentStatus(currentShipDate);
+
+        // Update status badge
+        statusBadge.textContent = `● ${status}`;
+        statusBadge.className = `status-badge ${statusClass}`;
+
+        // Update day counter
+        dayCounter.textContent = `Day ${diffDays} of shipment`;
+
+        // Update countdown timer
+        let timerText = '';
+        if (status === 'Delivered') {
+            timerText = '✅ Package delivered successfully!';
+        } else if (status === 'Pending') {
+            timerText = '⏳ Waiting for carrier pickup...';
+        } else if (status === 'Delivering') {
+            timerText = `🚚 Out for delivery - ${diffHours}h ${diffMinutes}m elapsed today`;
+        } else {
+            timerText = `⏳ ${diffDays}d ${diffHours}h ${diffMinutes}m ${diffSeconds}s in transit`;
+        }
+        countdownTimer.textContent = timerText;
+
+        // Update last update time
+        const now = new Date();
+        const timeStr = now.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true });
+        lastUpdate.textContent = `Updated ${timeStr}`;
+
+        // Update progress bar
+        progressFill.style.width = progress + '%';
+        progressFill.className = `progress-fill ${statusClass}`;
+        progressPercent.textContent = progress + '%';
+
+        // Re-render timeline
+        renderTimeline(events);
+
+        // Save updated progress to localStorage periodically (every 10 seconds)
+        if (currentShipDate && currentTrackingNumber) {
+            saveTrackingData(currentTrackingNumber, currentShipDate);
+        }
+    }
+
+    // ---------- Core: track ANY package ----------
+    function trackPackage(trackingNumber, useSavedDate = false) {
+        // Clear old interval
+        if (updateInterval) {
+            clearInterval(updateInterval);
+            updateInterval = null;
+        }
+
+        // Reset UI
+        resultsPanel.style.display = 'none';
+        loadingIndicator.style.display = 'flex';
+        trackBtn.disabled = true;
+        savedBadge.style.display = 'none';
+
+        const delay = 1500 + Math.random() * 1000;
+        setTimeout(() => {
+            loadingIndicator.style.display = 'none';
+            trackBtn.disabled = false;
+
+            // Check if we have saved data for this tracking number
+            const savedData = loadTrackingData(trackingNumber);
+            let shipDate;
+
+            if (savedData && useSavedDate) {
+                // Use saved ship date
+                shipDate = savedData.shipDate;
+                savedBadge.style.display = 'inline-block';
+                memoryNotice.textContent = '💾 Tracking data loaded from memory! Timer continues where it left off.';
+            } else {
+                // Start fresh
+                shipDate = new Date();
+                memoryNotice.textContent = '💡 Tracking data is saved in your browser. Close and reopen to continue tracking!';
+                // Save immediately
+                saveTrackingData(trackingNumber, shipDate);
+            }
+
+            // Set global state
+            currentTrackingNumber = trackingNumber;
+            currentShipDate = shipDate;
+
+            // Populate static info
+            displayNum.textContent = trackingNumber;
+            liveTag.style.display = 'inline';
+
+            // Ship date display
+            const shipDateStr = shipDate.toLocaleString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: true 
+            });
+            shipDateDisplay.textContent = `📦 Shipped: ${shipDateStr}`;
+
+            // Show results
+            resultsPanel.style.display = 'block';
+
+            // Initial update
+            updateUI();
+
+            // Start auto-update every second
+            updateInterval = setInterval(updateUI, 1000);
+
+            // Fade animation
+            resultsPanel.style.animation = 'none';
+            resultsPanel.offsetHeight;
+            resultsPanel.style.animation = 'fadeIn 0.4s ease';
+        }, delay);
+    }
+
+    // Fade-in animation
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = `
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    `;
+    document.head.appendChild(styleSheet);
+
+    // ---------- Event listeners ----------
+    trackBtn.addEventListener('click', () => {
+        const val = input.value.trim();
+        if (!val) {
+            alert('Please enter a tracking number.');
+            return;
+        }
+        // Check if we have saved data for this number
+        const savedData = loadTrackingData(val);
+        trackPackage(val, !!savedData); // Pass true if saved data exists
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') trackBtn.click();
+    });
+
+    // ---------- Auto-load with saved data ----------
+    window.addEventListener('DOMContentLoaded', () => {
+        const defaultNumber = input.value.trim();
+        const savedData = loadTrackingData(defaultNumber);
+        if (savedData) {
+            // Auto-load with saved date
+            trackPackage(defaultNumber, true);
+        } else {
+            // Fresh start
+            trackPackage(defaultNumber, false);
+        }
+
+        // Show all saved tracking numbers in console (for debugging)
+        const saved = getAllSavedTrackingNumbers();
+        if (saved.length > 0) {
+            console.log('📦 Saved tracking numbers:', saved.join(', '));
+        }
+    });
+
+    // ---------- Cleanup on page unload ----------
+    window.addEventListener('beforeunload', () => {
+        if (updateInterval) {
+            clearInterval(updateInterval);
+        }
+        // Final save
+        if (currentTrackingNumber && currentShipDate) {
+            saveTrackingData(currentTrackingNumber, currentShipDate);
+        }
+    });
+</script>
+</body>
+</html>
